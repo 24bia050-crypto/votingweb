@@ -5,25 +5,20 @@ import dj_database_url
 
 load_dotenv()
 
-# ======================
-# BASE DIR (HII NI MUST KUWA JUU SANA)
-# ======================
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # ======================
 # SECURITY
 # ======================
 SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret')
-
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = False
 
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '.onrender.com',
+    'votingweb-backend.onrender.com'
 ]
-
 
 # ======================
 # APPS
@@ -40,7 +35,6 @@ INSTALLED_APPS = [
     'api',
 ]
 
-
 # ======================
 # MIDDLEWARE
 # ======================
@@ -48,6 +42,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -56,15 +51,17 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-
+# ======================
+# CORS
+# ======================
 CORS_ALLOW_ALL_ORIGINS = True
 
-
 # ======================
-# URL CONFIG
+# URL
 # ======================
 ROOT_URLCONF = 'voting_project.urls'
 
+WSGI_APPLICATION = 'voting_project.wsgi.application'
 
 # ======================
 # TEMPLATES
@@ -76,9 +73,7 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
-                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
-                'django.template.context_processors.static',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -86,15 +81,8 @@ TEMPLATES = [
     },
 ]
 
-
 # ======================
-# WSGI
-# ======================
-WSGI_APPLICATION = 'voting_project.wsgi.application'
-
-
-# ======================
-# DATABASE (POSTGRES RENDER SAFE)
+# DATABASE (POSTGRES RENDER)
 # ======================
 DATABASES = {
     'default': dj_database_url.config(
@@ -104,21 +92,17 @@ DATABASES = {
     )
 }
 
-# fallback kwa local (ikiwa DATABASE_URL haipo)
+# fallback (VERY IMPORTANT for local dev)
 if not DATABASES['default'].get('ENGINE'):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-
 
 # ======================
 # PASSWORD VALIDATION
 # ======================
 AUTH_PASSWORD_VALIDATORS = []
-
 
 # ======================
 # INTERNATIONALIZATION
@@ -128,21 +112,17 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-
 # ======================
-# STATIC FILES
+# STATIC FILES (RENDER FIX)
 # ======================
 STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STATICFILES_DIRS = [
-    BASE_DIR.parent / 'css',
     BASE_DIR.parent / 'frontend' / 'static',
 ]
 
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 
 # ======================
 # MEDIA
@@ -150,21 +130,10 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-
-# ======================
-# DEFAULT AUTO FIELD
-# ======================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
 # ======================
-# CUSTOM
-# ======================
-ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', 'adminsecret')
-
-
-# ======================
-# DRF
+# REST
 # ======================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (),

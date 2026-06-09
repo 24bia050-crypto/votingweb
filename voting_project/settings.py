@@ -1,17 +1,28 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import dj_database_url
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret')
+# ======================
+# SECURITY
+# ======================
+SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret')
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.onrender.com'
+]
 
+# ======================
+# APPS
+# ======================
 INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.admin',
@@ -24,9 +35,13 @@ INSTALLED_APPS = [
     'api',
 ]
 
+# ======================
+# MIDDLEWARE
+# ======================
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -35,11 +50,20 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# ======================
+# CORS
+# ======================
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
+# ======================
+# URLS
+# ======================
 ROOT_URLCONF = 'voting_project.urls'
 
+# ======================
+# TEMPLATES
+# ======================
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -57,47 +81,64 @@ TEMPLATES = [
     },
 ]
 
+# ======================
+# WSGI
+# ======================
 WSGI_APPLICATION = 'voting_project.wsgi.application'
 
+# ======================
+# DATABASE (POSTGRESQL - RENDER)
+# ======================
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('MYSQL_DATABASE', 'voting_app'),
-        'USER': os.getenv('MYSQL_USER', 'root'),
-        'PASSWORD': os.getenv('MYSQL_PASSWORD', '1234'),
-        'HOST': os.getenv('MYSQL_HOST', '127.0.0.1'),
-        'PORT': os.getenv('MYSQL_PORT', '3306'),
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
-    }
+    'default': dj_database_url.config(
+        default=os.getenv('DATABASE_URL')
+    )
 }
 
+# ======================
+# PASSWORDS
+# ======================
 AUTH_PASSWORD_VALIDATORS = []
 
+# ======================
+# INTERNATIONALIZATION
+# ======================
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 
+# ======================
+# STATIC FILES
+# ======================
 STATIC_URL = '/static/'
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-# Serve frontend static files and css folder located at repository root
 STATICFILES_DIRS = [
     BASE_DIR.parent / 'css',
     BASE_DIR.parent / 'frontend' / 'static',
 ]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# ======================
+# MEDIA
+# ======================
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# ======================
+# DEFAULT AUTO FIELD
+# ======================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Simple admin API key for protecting admin endpoints in prototype
+# ======================
+# CUSTOM
+# ======================
 ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', 'adminsecret')
 
+# ======================
+# DRF
+# ======================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (),
     'DEFAULT_PERMISSION_CLASSES': (),

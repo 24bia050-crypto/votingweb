@@ -11,13 +11,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ======================
 SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+DEBUG = False
 
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '.onrender.com'
+    '.onrender.com',
+    'votingweb.onrender.com'  # add your real domain
 ]
 
 # ======================
@@ -91,7 +93,9 @@ WSGI_APPLICATION = 'voting_project.wsgi.application'
 # ======================
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL')
+        default=os.getenv('DATABASE_URL'),
+        conn_max_age=600,
+        ssl_require=True
     )
 }
 

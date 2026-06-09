@@ -57,10 +57,9 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = True
 
 # ======================
-# URL
+# URL CONFIG
 # ======================
 ROOT_URLCONF = 'voting_project.urls'
-
 WSGI_APPLICATION = 'voting_project.wsgi.application'
 
 # ======================
@@ -69,7 +68,7 @@ WSGI_APPLICATION = 'voting_project.wsgi.application'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR.parent / 'frontend' / 'public'],
+        'DIRS': [os.path.join(BASE_DIR, 'frontend', 'public')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -82,7 +81,7 @@ TEMPLATES = [
 ]
 
 # ======================
-# DATABASE (POSTGRES RENDER)
+# DATABASE (RENDER POSTGRES)
 # ======================
 DATABASES = {
     'default': dj_database_url.config(
@@ -92,7 +91,7 @@ DATABASES = {
     )
 }
 
-# fallback (VERY IMPORTANT for local dev)
+# fallback local sqlite
 if not DATABASES['default'].get('ENGINE'):
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -113,13 +112,13 @@ USE_I18N = True
 USE_TZ = True
 
 # ======================
-# STATIC FILES (RENDER FIX)
+# STATIC FILES
 # ======================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STATICFILES_DIRS = [
-    BASE_DIR.parent / 'frontend' / 'static',
+    os.path.join(BASE_DIR, 'frontend', 'static'),
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -130,12 +129,15 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# ======================
+# DEFAULT AUTO FIELD
+# ======================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ======================
-# REST
+# REST FRAMEWORK
 # ======================
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (),
-    'DEFAULT_PERMISSION_CLASSES': (),
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [],
 }

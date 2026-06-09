@@ -23,6 +23,4 @@ urlpatterns = [
 urlpatterns += static(
     settings.MEDIA_URL,
     document_root=settings.MEDIA_ROOT
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'   
 )

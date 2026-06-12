@@ -1,11 +1,18 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
+from django.http import FileResponse
+import os
 
 from django.conf import settings
 from django.conf.urls.static import static
 
+def serve_ads_txt(request):
+    ads_txt_path = os.path.join(settings.BASE_DIR, 'ads.txt')
+    return FileResponse(open(ads_txt_path, 'rb'), content_type='text/plain')
+
 urlpatterns = [
+    path('ads.txt', serve_ads_txt, name='ads_txt'),
     path('admin/', admin.site.urls),
 
     # Frontend pages

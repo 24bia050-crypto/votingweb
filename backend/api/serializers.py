@@ -24,12 +24,17 @@ class CandidateSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'image_url', 'position', 'position_name', 'votes_count']
 
     def get_image_url(self, obj):
-        if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
-        return obj.image_url or ''
+        url = obj.image_url or ''
+        if not url:
+            return ''
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
+        if url.startswith('/'):
+            return url
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class VoteSerializer(serializers.ModelSerializer):

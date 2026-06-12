@@ -1,5 +1,7 @@
 import re
+import os
 from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Count
 from rest_framework.views import APIView
@@ -95,7 +97,7 @@ class ResultsView(APIView):
                 'id': c.id,
                 'name': c.name,
                 'position': c.position.name,
-                'image_url': c.image.url if c.image else c.image_url,
+                'image_url': c.image_url or '',
                 'votes': c.vote_count,
             }
             for c in qs
@@ -226,7 +228,7 @@ class WinnersView(AdminBaseView):
                 'name': candidate.name,
                 'position': candidate.position.name,
                 'votes': candidate.vote_count,
-                'image_url': candidate.image.url if candidate.image else candidate.image_url,
+                'image_url': candidate.image_url or '',
             }
             for candidate in qs
         ]
@@ -237,13 +239,22 @@ class AdminUploadImageView(AdminBaseView):
     def post(self, request):
         candidate_id = request.data.get('candidate_id')
         image_url = request.data.get('image_url')
-        if not candidate_id or not image_url:
-            return Response({'detail': 'candidate_id and image_url required'}, status=status.HTTP_400_BAD_REQUEST)
+        uploaded_file = request.FILES.get('image')
+        if not candidate_id:
+            return Response({'detail': 'candidate_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not uploaded_file and not image_url:
+            return Response({'detail': 'candidate_id and image_url or uploaded image required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             candidate = Candidate.objects.get(pk=candidate_id)
         except Candidate.DoesNotExist:
             return Response({'detail': 'candidate not found'}, status=status.HTTP_404_NOT_FOUND)
-        candidate.image_url = image_url
+        if uploaded_file:
+            upload_folder = 'candidate_images'
+            filename = default_storage.get_available_name(os.path.join(upload_folder, uploaded_file.name))
+            saved_path = default_storage.save(filename, uploaded_file)
+            candidate.image_url = os.path.join(settings.MEDIA_URL, saved_path).replace('\\', '/')
+        else:
+            candidate.image_url = image_url
         candidate.save(update_fields=['image_url'])
         return Response({'id': candidate.id, 'image_url': candidate.image_url})
 

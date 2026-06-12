@@ -1,13 +1,7 @@
-from datetime import timedelta
 import re
-
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count
-from django.utils import timezone
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
-import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -18,32 +12,33 @@ from .serializers import (
     CandidateSerializer,
 )
 
-PHONE_REGEX = re.compile(r'^\+255[6-9]\d{8}$')
-
 
 class LoginView(APIView):
     def post(self, request):
         name = request.data.get('name')
         phone = request.data.get('phone')
+
         if not name or not phone:
             return Response({'detail': 'name and phone required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        phone = re.sub(r'[\s-]+', '', phone)
-        if not PHONE_REGEX.match(phone):
-            return Response({
-                'detail': 'phone must be a valid Tanzania number starting with +255 and 9 digits'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        phone = phone.strip()
+        if not re.fullmatch(r'\+255\d{9}', phone):
+            return Response({'detail': 'phone must start with +255 and include 9 digits'}, status=status.HTTP_400_BAD_REQUEST)
 
         voter = Voter.objects.filter(phone=phone).first()
         if voter:
+            # Block re-login if already voted
+            if voter.has_voted:
+                return Response({'detail': 'you have already voted and cannot log in again'}, status=status.HTTP_403_FORBIDDEN)
+            
             voter.name = name
-            voter.generate_token()
+            if not voter.token:
+                voter.generate_token()
             voter.save(update_fields=['name', 'token'])
         else:
             voter = Voter.objects.create(
                 name=name,
                 phone=phone,
-                password='',
             )
             voter.generate_token()
 
@@ -75,64 +70,37 @@ class VoteView(APIView):
             voter = Voter.objects.get(token=token)
         except Voter.DoesNotExist:
             return Response({'detail': 'invalid token'}, status=status.HTTP_403_FORBIDDEN)
+        if voter.has_voted:
+            return Response({'detail': 'already voted'}, status=status.HTTP_403_FORBIDDEN)
         try:
             candidate = Candidate.objects.select_related('position').get(pk=candidate_id)
         except Candidate.DoesNotExist:
             return Response({'detail': 'candidate not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        existing_vote = Vote.objects.filter(voter=voter, position=candidate.position).first()
-        if existing_vote:
-            elapsed = timezone.now() - existing_vote.created_at
-            if elapsed > timedelta(minutes=30):
-                return Response({'detail': 'vote lock time expired; vote cannot be changed'}, status=status.HTTP_403_FORBIDDEN)
-            if existing_vote.candidate_id == candidate.id:
-                return Response({'detail': 'vote already recorded for this candidate'}, status=status.HTTP_200_OK)
-            with transaction.atomic():
-                existing_vote.candidate = candidate
-                existing_vote.created_at = timezone.now()
-                existing_vote.save(update_fields=['candidate', 'created_at'])
-            return Response({'detail': 'vote updated'}, status=status.HTTP_200_OK)
-
-        # Create a fresh vote for this position and allow editing for 30 minutes
+        # Enforce one vote per position using transaction and unique_together
         with transaction.atomic():
+            # create vote; unique_together prevents duplicates
             Vote.objects.create(voter=voter, candidate=candidate, position=candidate.position)
-            if not voter.has_voted:
-                voter.has_voted = True
-                voter.save(update_fields=['has_voted'])
+            voter.has_voted = True
+            voter.save(update_fields=['has_voted'])
 
         return Response({'detail': 'vote recorded'}, status=status.HTTP_201_CREATED)
 
 
 class ResultsView(APIView):
     def get(self, request):
-        total_voters = Voter.objects.count()
-        total_votes = Vote.objects.count()
-        positions = Position.objects.all().prefetch_related('candidates')
-        data = []
-        for pos in positions:
-            candidates = Candidate.objects.filter(position=pos).annotate(vote_count=Count('votes')).order_by('-vote_count')
-            position_total_votes = sum(c.vote_count for c in candidates)
-            data.append({
-                'position_id': pos.id,
-                'position': pos.name,
-                'position_total_votes': position_total_votes,
-                'candidates': [
-                    {
-                        'id': c.id,
-                        'name': c.name,
-                        'description': c.description or '',
-                        'image_url': c.image.url if getattr(c, 'image', None) else (c.image_url or ''),
-                        'votes': c.vote_count,
-                        'percent': round((c.vote_count / position_total_votes * 100) if position_total_votes else 0, 1),
-                    }
-                    for c in candidates
-                ],
-            })
-        return Response({
-            'total_voters': total_voters,
-            'total_votes': total_votes,
-            'positions': data,
-        })
+        qs = Candidate.objects.annotate(vote_count=Count('votes')).order_by('-vote_count')
+        data = [
+            {
+                'id': c.id,
+                'name': c.name,
+                'position': c.position.name,
+                'image_url': c.image.url if c.image else c.image_url,
+                'votes': c.vote_count,
+            }
+            for c in qs
+        ]
+        return Response(data)
 
 
 class AdminBaseView(APIView):
@@ -232,54 +200,6 @@ class AdminUserView(AdminBaseView):
         return Response(serializer.data)
 
 
-class ResetElectionView(AdminBaseView):
-    def post(self, request):
-        # Delete all votes and reset voters' has_voted flag
-        votes_deleted, _ = Vote.objects.all().delete()
-        Voter.objects.update(has_voted=False)
-        return Response({'detail': 'election reset', 'votes_deleted': votes_deleted})
-
-
-class WinnersView(AdminBaseView):
-    def get(self, request):
-        positions = Position.objects.all()
-        winners = []
-        for pos in positions:
-            top = Candidate.objects.filter(position=pos).annotate(votes_count=Count('votes')).order_by('-votes_count').first()
-            if top:
-                winners.append({
-                    'position_id': pos.id,
-                    'position': pos.name,
-                    'candidate_id': top.id,
-                    'candidate': top.name,
-                    'image_url': top.image_url or '',
-                    'votes': getattr(top, 'votes_count', 0),
-                })
-        return Response(winners)
-
-
-class AdminUploadImageView(AdminBaseView):
-    def post(self, request):
-        candidate_id = request.data.get('candidate_id') or request.POST.get('candidate_id')
-        file = request.FILES.get('image')
-        if not candidate_id or not file:
-            return Response({'detail': 'candidate_id and image file required'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            candidate = Candidate.objects.get(pk=candidate_id)
-        except Candidate.DoesNotExist:
-            return Response({'detail': 'candidate not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Save file to media/candidates/<id>/
-        filename = file.name
-        rel_dir = os.path.join('candidates', str(candidate_id))
-        rel_path = os.path.join(rel_dir, filename)
-        saved_path = default_storage.save(rel_path, ContentFile(file.read()))
-        media_url = getattr(settings, 'MEDIA_URL', '/media/')
-        candidate.image_url = os.path.join(media_url, saved_path).replace('\\', '/')
-        candidate.save(update_fields=['image_url'])
-        return Response({'detail': 'image uploaded', 'image_url': candidate.image_url})
-
-
 class AdminVoteView(AdminBaseView):
     def get(self, request):
         qs = Vote.objects.select_related('voter', 'candidate', 'position').all()
@@ -295,6 +215,37 @@ class AdminVoteView(AdminBaseView):
             for vote in qs
         ]
         return Response(data)
+
+
+class WinnersView(AdminBaseView):
+    def get(self, request):
+        qs = Candidate.objects.annotate(vote_count=Count('votes')).order_by('-vote_count')
+        data = [
+            {
+                'id': candidate.id,
+                'name': candidate.name,
+                'position': candidate.position.name,
+                'votes': candidate.vote_count,
+                'image_url': candidate.image.url if candidate.image else candidate.image_url,
+            }
+            for candidate in qs
+        ]
+        return Response(data)
+
+
+class AdminUploadImageView(AdminBaseView):
+    def post(self, request):
+        candidate_id = request.data.get('candidate_id')
+        image_url = request.data.get('image_url')
+        if not candidate_id or not image_url:
+            return Response({'detail': 'candidate_id and image_url required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            candidate = Candidate.objects.get(pk=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response({'detail': 'candidate not found'}, status=status.HTTP_404_NOT_FOUND)
+        candidate.image_url = image_url
+        candidate.save(update_fields=['image_url'])
+        return Response({'id': candidate.id, 'image_url': candidate.image_url})
 
 
 class ResetElectionView(AdminBaseView):

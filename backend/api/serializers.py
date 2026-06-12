@@ -6,9 +6,6 @@ class VoterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voter
         fields = ['id', 'name', 'phone', 'has_voted', 'is_admin', 'token']
-        extra_kwargs = {
-            'password': {'write_only': True, 'required': False}
-        }
 
 
 class PositionSerializer(serializers.ModelSerializer):
@@ -24,14 +21,14 @@ class CandidateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Candidate
-        fields = ['id', 'name', 'description', 'image_url', 'position', 'position_name', 'votes_count']
+        fields = ['id', 'name', 'image_url', 'position', 'position_name', 'votes_count']
 
     def get_image_url(self, obj):
-        if getattr(obj, 'image', None):
-            try:
-                return obj.image.url
-            except ValueError:
-                pass
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
         return obj.image_url or ''
 
 
